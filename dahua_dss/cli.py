@@ -14,8 +14,8 @@ import json
 import logging
 import os
 import requests
-from datetime import datetime
-from typing import Any, Optional, Dict, List
+from datetime import datetime, timedelta
+from typing import Any, Optional, Dict, List, cast
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
@@ -53,6 +53,7 @@ class DahuaDSSClient:
 
     DEVICE_TREE_ENDPOINT = "/brms/api/v1.0/tree/devices"
     LIVE_VIDEO_ENDPOINT = "/brms/api/v1.0/MTS/Video/StartVideo"
+    QUERY_RECORDS_ENDPOINT = "/brms/api/v1.0/SS/Record/QueryRecords"
 
     def __init__(self, host: str, port: int = 443, use_https: bool = True, disable_ssl_verify: bool = False) -> None:
         """
@@ -367,7 +368,7 @@ class DahuaDSSClient:
         try:
             payload: dict[str, dict] = {
                 "data": {
-                    "streamType": stream_type,
+                    "streamType": str(stream_type),
                     # "trackId": "",
                     "channelId": channel_id,
                     # "keyCode": "",
@@ -403,7 +404,9 @@ class DahuaDSSClient:
 
         raise NotImplementedError("Playback stream URL retrieval not implemented yet.")
 
-    def search_recordings(self, channel_id: str, start_time: str, end_time: str) -> Optional[List[Dict]]:
+    def search_recordings(
+        self, channel_id: str, start_time: str, end_time: str, stream_type: int = 1
+    ) -> Optional[List[Dict]]:
         """
         Search for available recordings in a time period
 
@@ -411,6 +414,7 @@ class DahuaDSSClient:
             channel_id: Channel ID from device tree
             start_time: Start time in format "YYYY-MM-DD HH:MM:SS"
             end_time: End time in format "YYYY-MM-DD HH:MM:SS"
+            stream_type: 1=Main stream, 2=Sub stream. In multi-screen mode, the value range is 0-1024
 
         Returns:
             List of recording segments
@@ -419,7 +423,49 @@ class DahuaDSSClient:
             console.print("[red]✗[/red] Not authenticated. Please login first.", style="bold")
             return None
 
-        raise NotImplementedError("Recordings search not implemented yet.")
+        try:
+            # transform time to timestamp in seconds
+            start_timestamp = int(datetime.strptime(start_time, "%Y-%m-%d %H:%M:%S").timestamp())
+            end_timestamp = int(datetime.strptime(end_time, "%Y-%m-%d %H:%M:%S").timestamp())
+
+            payload: dict[str, dict] = {
+                "data": {
+                    "endTime": end_timestamp,
+                    "startTime": start_timestamp,
+                    "channelId": channel_id,
+                    "streamType": str(stream_type),  # 1: Main stream, 2: Sub stream
+                    # Recording type:
+                    # 0: All
+                    # 1: Manual recording
+                    # 2: Alarm recording
+                    # 3: Dynamic monitoring
+                    # 4: Video loss
+                    # 5: Video tampering
+                    # 6: Scheduled recording
+                    # 7: All-weather recording
+                    # 8: File recording conversion
+                    "recordType": "0",
+                    "recordSource": "3",  # 2: Device, 3: Center
+                    # "page": "",
+                    # "session": ""
+                }
+            }
+            response = self.session.post(self.base_url + self.QUERY_RECORDS_ENDPOINT, json=payload, timeout=15)
+            response.raise_for_status()
+            console.print(f"[dim]Response: {response.text}[/dim]")
+
+            data = response.json()
+            # save data to file
+            with open("live_stream.json", "w") as f:
+                json.dump(data, f, indent=2)
+
+            if "data" not in data or data.get("code") != self.SUCCESS_CODE:
+                console.print(f"[red]✗[/red] Error ({data['code']}): {data['desc']}", style="bold")
+                return None
+            return cast(Optional[List[Dict]], data["data"])
+        except requests.exceptions.RequestException as e:
+            console.print(f"[red]✗[/red] Request error: {e}", style="bold")
+            return None
 
     def display_recordings(self, recordings: List[Dict]) -> None:
         """
@@ -467,12 +513,28 @@ def show_menu() -> None:
     console.print()
 
 
+def get_default_time_range() -> tuple[str, str]:
+    """
+    Get default start and end times for the previous 24 hours
+
+    Returns:
+        Tuple of (start_time, end_time) in format "YYYY-MM-DD HH:MM:SS"
+    """
+    now = datetime.now()
+    end_time = now.strftime("%Y-%m-%d %H:%M:%S")
+    start_time = (now - timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
+    return start_time, end_time
+
+
 def main() -> None:
     """Main interactive interface"""
 
     argparser = argparse.ArgumentParser(description="Dahua DSS Video Management System - Interactive API Client")
     argparser.add_argument("-t", "--token", help="Dahua DSS authentication token", default=None)
     args = argparser.parse_args()
+
+    # Get default time range for previous 24 hours
+    default_start_time, default_end_time = get_default_time_range()
 
     show_banner()
 
@@ -556,20 +618,22 @@ def main() -> None:
                 console.print()
                 channel_id = Prompt.ask("Enter Channel ID")
                 console.print("\n[dim]Enter time range (format: YYYY-MM-DD HH:MM:SS)[/dim]")
-                start_time = Prompt.ask("Start time", default="2025-11-25 00:00:00")
-                end_time = Prompt.ask("End time", default="2025-11-25 23:59:59")
+                start_time = Prompt.ask("Start time", default=default_start_time)
+                end_time = Prompt.ask("End time", default=default_end_time)
 
                 recordings = client.search_recordings(channel_id, start_time, end_time)
                 if recordings:
                     client.display_recordings(recordings)
+                else:
+                    console.print("[yellow]No recordings found for the specified time range.[/yellow]")
 
             elif choice == "4":
                 # Get playback stream
                 console.print()
                 channel_id = Prompt.ask("Enter Channel ID")
                 console.print("\n[dim]Enter playback time range (format: YYYY-MM-DD HH:MM:SS)[/dim]")
-                start_time = Prompt.ask("Start time", default="2025-11-25 00:00:00")
-                end_time = Prompt.ask("End time", default="2025-11-25 01:00:00")
+                start_time = Prompt.ask("Start time", default=default_start_time)
+                end_time = Prompt.ask("End time", default=default_end_time)
                 stream_type = Prompt.ask("Stream type", choices=["0", "1"], default="0")
 
                 stream_names = {"0": "Main Stream", "1": "Sub Stream"}
