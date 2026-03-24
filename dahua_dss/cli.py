@@ -161,7 +161,6 @@ class DahuaDSSClient:
             console.print(f"[green]✓[/green] Logged out successfully: {response.text}", style="bold")
         except Exception as e:
             console.print(f"[red]✗[/red] Error logging out: {e}", style="bold")
-            pass
         finally:
             self.clear_token()
 
@@ -415,7 +414,6 @@ class DahuaDSSClient:
             except Exception as e:
                 console.print(f"[red]✗[/red] Error calculating duration: {e}", style="bold")
                 console.bell()
-                pass
 
             # Format file size
             if file_size != "N/A":
@@ -432,7 +430,6 @@ class DahuaDSSClient:
                 except Exception as e:
                     console.print(f"[red]✗[/red] Error formatting file size: {e}", style="bold")
                     console.bell()
-                    pass
 
             table.add_row(str(idx), start, end, duration, file_size, rec_type)
 
