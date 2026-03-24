@@ -1,0 +1,10 @@
+services:
+  dahua-dss:
+    build: .
+    image: dahua-dss-client
+    stdin_open: true
+    tty: true
+    env_file:
+      - .env
+    entrypoint: ["python", "-m", "dahua_dss.cli"]
+    command: []

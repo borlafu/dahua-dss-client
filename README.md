@@ -56,8 +56,8 @@ cp .env.example .env
 # Edit .env with your DSS credentials
 nano .env
 
-# Start the service
-docker-compose up -d
+# Run interactively
+docker compose run --rm dahua-dss
 ```
 
 ## Quick Start
@@ -212,14 +212,8 @@ docker build -t dahua-dss-client .
 # Interactive mode
 docker run -it --rm dahua-dss-client
 
-# With docker-compose
-docker-compose up -d
-```
-
-### Stop Services
-
-```bash
-docker-compose down
+# With docker compose
+docker compose run --rm dahua-dss
 ```
 
 ## Playing Video Streams
