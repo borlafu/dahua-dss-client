@@ -10,6 +10,7 @@ This script provides an interactive interface to:
 """
 
 import argparse
+import json
 import logging
 import requests
 from datetime import datetime
@@ -24,7 +25,7 @@ from rich import box
 import urllib3
 
 
-DEFAULT_DSS_HOST = "ocsquantum.a.pinggy.link"
+DEFAULT_DSS_HOST = "lnkuu-84-199-49-194.a.free.pinggy.link"  # "ocsquantum.a.pinggy.link"
 DEFAULT_DSS_USER = "monitor"
 
 # Initialize Rich console
@@ -43,6 +44,7 @@ class DahuaDSSClient:
     AUTH_TOKEN_HEADER = "X-Subject-Token"
 
     DEVICE_TREE_ENDPOINT = "/brms/api/v1.0/tree/devices"
+    LIVE_VIDEO_ENDPOINT = "/brms/api/v1.0/MTS/Video/StartVideo"
 
     def __init__(self, host: str, port: int = 443, use_https: bool = True, disable_ssl_verify: bool = False) -> None:
         """
@@ -186,6 +188,10 @@ class DahuaDSSClient:
             # console.print(f"[dim]Devices: {response.text}[/dim]")
 
             data = response.json()
+            # save data to file\
+            with open("device_tree.json", "w") as f:
+                json.dump(data, f, indent=2)
+
             return data.get("data", {}).get("devices") if "data" in data and "devices" in data["data"] else None
 
         except requests.exceptions.RequestException as e:
@@ -301,22 +307,58 @@ class DahuaDSSClient:
         console.print(table)
         console.print()
 
-    def get_live_stream_url(self, channel_id: str, stream_type: int = 0) -> Optional[str]:
+    def get_live_stream_url(self, channel_id: str, stream_type: int = 1) -> Optional[str]:
         """
         Get live video stream URL for a channel
 
         Args:
             channel_id: Channel ID from device tree
-            stream_type: 0=Main stream, 1=Sub stream, 2=Third stream
+            stream_type: 1=Main stream, 2=Sub stream. In multi-screen mode, the value range is 0-1024
 
         Returns:
             RTSP URL for live stream
         """
-        raise NotImplementedError("Live stream URL retrieval not implemented yet.")
+        if not self.token:
+            console.print("[red]✗[/red] Not authenticated. Please login first.", style="bold")
+            return None
+
+        try:
+            payload: dict[str, dict] = {
+                "data": {
+                    "streamType": stream_type,
+                    # "trackId": "",
+                    "channelId": channel_id,
+                    # "keyCode": "",
+                    "dataType": "1",  # Video stream
+                    # "enableRtsps": "0",
+                    # "enableMulticast": "0",
+                    # "fakeSdp": "0",
+                }
+            }
+            response = self.session.post(self.base_url + self.LIVE_VIDEO_ENDPOINT, json=payload, timeout=15)
+            response.raise_for_status()
+            console.print(f"[dim]Response: {response.text}[/dim]")
+
+            data = response.json()
+            # save data to file
+            with open("live_stream.json", "w") as f:
+                json.dump(data, f, indent=2)
+
+            if "data" not in data or data.get("code") != self.SUCCESS_CODE:
+                console.print(f"[red]✗[/red] Error ({data['code']}): {data['desc']}", style="bold")
+                return None
+            return f"{data['data']['url']}?token={data['data']['token']}"
+        except requests.exceptions.RequestException as e:
+            console.print(f"[red]✗[/red] Request error: {e}", style="bold")
+            return None
 
     def get_playback_stream_url(
         self, channel_id: str, start_time: str, end_time: str, stream_type: int = 0
     ) -> Optional[str]:
+        if not self.token:
+            console.print("[red]✗[/red] Not authenticated. Please login first.", style="bold")
+            return None
+
         raise NotImplementedError("Playback stream URL retrieval not implemented yet.")
 
     def search_recordings(self, channel_id: str, start_time: str, end_time: str) -> Optional[List[Dict]]:
@@ -335,45 +377,7 @@ class DahuaDSSClient:
             console.print("[red]✗[/red] Not authenticated. Please login first.", style="bold")
             return None
 
-        url = f"{self.base_url}/VIID/VideoControl/SearchRecordings"
-
-        # Convert time format
-        try:
-            start_dt = datetime.strptime(start_time, "%Y-%m-%d %H:%M:%S")
-            end_dt = datetime.strptime(end_time, "%Y-%m-%d %H:%M:%S")
-
-            start_str = start_dt.strftime("%Y%m%dT%H%M%S")
-            end_str = end_dt.strftime("%Y%m%dT%H%M%S")
-        except ValueError as e:
-            console.print(f"[red]✗[/red] Invalid time format: {e}", style="bold")
-            return None
-
-        payload = {"ChannelID": channel_id, "StartTime": start_str, "EndTime": end_str}
-
-        try:
-            with Progress(
-                SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console, transient=True
-            ) as progress:
-                progress.add_task(description="Searching recordings...", total=None)
-                response = self.session.post(url, json=payload, timeout=15)
-                response.raise_for_status()
-
-            data = response.json()
-
-            if data.get("ResponseStatusStrg") == "OK" or data.get("ResponseStatus") == "OK":
-                recordings: list[dict] = data.get("RecordList", [])
-                console.print(f"[green]✓[/green] Found [cyan]{len(recordings)}[/cyan] recording(s)", style="bold")
-                return recordings
-            else:
-                console.print(
-                    f"[red]✗[/red] Failed to search recordings: {data.get('StatusString', 'Unknown error')}",
-                    style="bold",
-                )
-                return None
-
-        except requests.exceptions.RequestException as e:
-            console.print(f"[red]✗[/red] Request error: {e}", style="bold")
-            return None
+        raise NotImplementedError("Recordings search not implemented yet.")
 
     def display_recordings(self, recordings: List[Dict]) -> None:
         """
@@ -386,56 +390,7 @@ class DahuaDSSClient:
             console.print("[yellow]No recordings found.[/yellow]")
             return
 
-        table = Table(title="🎬 Available Recordings", box=box.ROUNDED, show_header=True, header_style="bold cyan")
-
-        table.add_column("#", style="dim", width=4)
-        table.add_column("Start Time", style="green")
-        table.add_column("End Time", style="red")
-        table.add_column("Duration", justify="center", style="yellow")
-        table.add_column("File Size", justify="right", style="magenta")
-        table.add_column("Type", justify="center")
-
-        for idx, rec in enumerate(recordings, 1):
-            start = rec.get("StartTime", "N/A")
-            end = rec.get("EndTime", "N/A")
-            file_size = rec.get("FileSize", "N/A")
-            rec_type = rec.get("Type", "Normal")
-
-            # Calculate duration if possible
-            duration = "N/A"
-            try:
-                if start != "N/A" and end != "N/A":
-                    start_dt = datetime.strptime(start, "%Y%m%dT%H%M%S")
-                    end_dt = datetime.strptime(end, "%Y%m%dT%H%M%S")
-                    duration_sec = int((end_dt - start_dt).total_seconds())
-                    hours, remainder = divmod(duration_sec, 3600)
-                    minutes, seconds = divmod(remainder, 60)
-                    duration = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
-            except Exception as e:
-                console.print(f"[red]✗[/red] Error calculating duration: {e}", style="bold")
-                console.bell()
-
-            # Format file size
-            if file_size != "N/A":
-                try:
-                    size_bytes = int(file_size)
-                    if size_bytes < 1024:
-                        file_size = f"{size_bytes} B"
-                    elif size_bytes < 1024**2:
-                        file_size = f"{size_bytes/1024:.1f} KB"
-                    elif size_bytes < 1024**3:
-                        file_size = f"{size_bytes/(1024**2):.1f} MB"
-                    else:
-                        file_size = f"{size_bytes/(1024**3):.2f} GB"
-                except Exception as e:
-                    console.print(f"[red]✗[/red] Error formatting file size: {e}", style="bold")
-                    console.bell()
-
-            table.add_row(str(idx), start, end, duration, file_size, rec_type)
-
-        console.print()
-        console.print(table)
-        console.print()
+        raise NotImplementedError("Recordings display not implemented yet.")
 
 
 def show_banner() -> None:
@@ -525,16 +480,11 @@ def main() -> None:
 
             elif choice == "2":
                 # Get live stream
-                if not devices:
-                    console.print()
-                    console.print(Panel("[yellow]⚠ Please get device tree first (option 1)[/yellow]", style="yellow"))
-                    continue
-
                 console.print()
                 channel_id = Prompt.ask("Enter Channel ID")
-                stream_type = Prompt.ask("Stream type", choices=["0", "1", "2"], default="0")
+                stream_type = Prompt.ask("Stream type", choices=["0", "1", "2"], default="1")
 
-                stream_names = {"0": "Main Stream", "1": "Sub Stream", "2": "Third Stream"}
+                stream_names = {"1": "Main Stream", "2": "Sub Stream", "0": "Other"}
 
                 rtsp_url = client.get_live_stream_url(channel_id, int(stream_type))
                 if rtsp_url:
@@ -556,11 +506,6 @@ def main() -> None:
 
             elif choice == "3":
                 # Search recordings
-                if not devices:
-                    console.print()
-                    console.print(Panel("[yellow]⚠ Please get device tree first (option 1)[/yellow]", style="yellow"))
-                    continue
-
                 console.print()
                 channel_id = Prompt.ask("Enter Channel ID")
                 console.print("\n[dim]Enter time range (format: YYYY-MM-DD HH:MM:SS)[/dim]")
@@ -573,11 +518,6 @@ def main() -> None:
 
             elif choice == "4":
                 # Get playback stream
-                if not devices:
-                    console.print()
-                    console.print(Panel("[yellow]⚠ Please get device tree first (option 1)[/yellow]", style="yellow"))
-                    continue
-
                 console.print()
                 channel_id = Prompt.ask("Enter Channel ID")
                 console.print("\n[dim]Enter playback time range (format: YYYY-MM-DD HH:MM:SS)[/dim]")
