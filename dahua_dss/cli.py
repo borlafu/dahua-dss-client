@@ -307,6 +307,40 @@ class DahuaDSSClient:
         console.print(table)
         console.print()
 
+    def get_live_stream_hls_url(self, channel_id: str, stream_type: int = 1) -> Optional[str]:
+        """
+        Get live video stream URL for a channel
+
+        Args:
+            channel_id: Channel ID from device tree
+            stream_type: 1=Main stream, 2=Sub stream. In multi-screen mode, the value range is 0-1024
+
+        Returns:
+            RTSP URL for live stream
+        """
+        if not self.token:
+            console.print("[red]✗[/red] Not authenticated. Please login first.", style="bold")
+            return None
+
+        try:
+            url = f"{self.base_url}/brms/api/v1.1/video/live/channel/{channel_id}/hls?protocol=http&streamType={stream_type}"
+            response = self.session.get(url, timeout=15)
+            response.raise_for_status()
+            console.print(f"[dim]Response: {response.text}[/dim]")
+
+            data = response.json()
+            # save data to file
+            with open("live_stream_hls.json", "w") as f:
+                json.dump(data, f, indent=2)
+
+            if "data" not in data or data.get("code") != self.SUCCESS_CODE:
+                console.print(f"[red]✗[/red] Error ({data['code']}): {data['desc']}", style="bold")
+                return None
+            return f"{data['data']['streamUrl']}"
+        except requests.exceptions.RequestException as e:
+            console.print(f"[red]✗[/red] Request error: {e}", style="bold")
+            return None
+
     def get_live_stream_url(self, channel_id: str, stream_type: int = 1) -> Optional[str]:
         """
         Get live video stream URL for a channel
