@@ -3,9 +3,9 @@ Dahua DSS Client - Interactive Python client for Dahua DSS Video Management Syst
 """
 
 __version__ = "1.0.0"
-__author__ = "Your Name"
-__email__ = "your.email@example.com"
+__author__ = "Borja Lafuente"
+__email__ = "borlafu@gmail.com"
 
-from dahua_dss.cli import DahuaDSSClient
+from dahua_dss.client import DahuaDSSClient
 
 __all__ = ["DahuaDSSClient"]
