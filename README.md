@@ -81,21 +81,23 @@ docker run -it --rm dahua-dss-client
 from dahua_dss import DahuaDSSClient
 
 # Create client
-client = DahuaDSSClient("192.168.1.100", port=8088)
+client = DahuaDSSClient("192.168.1.100", port=443, use_https=True)
 
 # Login
 if client.login("admin", "password"):
     # Get devices
     devices = client.get_device_tree()
 
-    # Get live stream
-    rtsp_url = client.get_live_stream_url("channel_id", stream_type=0)
+    # Get live stream (stream_type: 1=Main, 2=Sub)
+    rtsp_url = client.get_live_stream_url("channel_id", stream_type=1)
 
     # Get playback stream
     playback_url = client.get_playback_stream_url(
         "channel_id",
         "2025-11-25 00:00:00",
-        "2025-11-25 01:00:00"
+        "2025-11-25 01:00:00",
+        stream_type=1,
+        record_source=2,
     )
 
     # Logout
@@ -108,8 +110,8 @@ if client.login("admin", "password"):
 
 When you run the application, you'll be prompted for:
 - DSS server IP/hostname
-- Port (default: 8088)
-- Whether to use HTTPS
+- Port (default: 443)
+- Whether to use HTTPS (default: yes)
 - Username and password
 
 ### 2. Main Menu Options
@@ -121,7 +123,7 @@ When you run the application, you'll be prompted for:
 
 **Option 2: Get Live Stream URL**
 - Select a channel ID from the device tree
-- Choose stream type (Main/Sub/Third)
+- Choose stream type (Main/Sub)
 - Receive RTSP URL for live viewing
 
 **Option 3: Search Recordings**
@@ -131,7 +133,7 @@ When you run the application, you'll be prompted for:
 
 **Option 4: Get Playback Stream URL**
 - Select channel ID and time range
-- Choose stream type
+- Choose stream type and record source
 - Receive RTSP URL for playback
 
 **Option 5: Logout and Exit**
@@ -145,17 +147,21 @@ Create a `.env` file (copy from `.env.example`):
 
 ```bash
 DSS_HOST=192.168.1.100
-DSS_PORT=8088
-DSS_USERNAME=admin
+DSS_PORT=443
+DSS_USER=admin
 DSS_PASSWORD=your_password
-DSS_USE_HTTPS=false
+DSS_USE_HTTPS=true
 ```
 
 ### Stream Types
 
-- **0** - Main Stream (High quality, higher bandwidth)
-- **1** - Sub Stream (Lower quality, lower bandwidth)
-- **2** - Third Stream (If available)
+- **1** - Main Stream (High quality, higher bandwidth)
+- **2** - Sub Stream (Lower quality, lower bandwidth)
+
+### Record Sources
+
+- **2** - Device (recording stored on the device)
+- **3** - Center (recording stored on the DSS server)
 
 ## Development
 
@@ -173,33 +179,23 @@ poetry shell
 
 ```bash
 # Run all tests
-make test
+poetry run pytest
 
-# Run with coverage
-make test-cov
+# Run with coverage report
+poetry run pytest --cov=dahua_dss --cov-report=term-missing
 ```
 
 ### Code Quality
 
 ```bash
 # Format code
-make format
+poetry run black dahua_dss tests
 
-# Run linters
-make lint
+# Sort imports
+poetry run isort dahua_dss tests
 
-# Check formatting
-make format-check
-```
-
-### Build and Publish
-
-```bash
-# Build package
-make build
-
-# Publish to PyPI
-make publish
+# Type checking
+poetry run mypy dahua_dss
 ```
 
 ## Docker
@@ -207,23 +203,23 @@ make publish
 ### Build Image
 
 ```bash
-make docker-build
+docker build -t dahua-dss-client .
 ```
 
 ### Run Container
 
 ```bash
 # Interactive mode
-make docker-run
+docker run -it --rm dahua-dss-client
 
 # With docker-compose
-make docker-compose-up
+docker-compose up -d
 ```
 
 ### Stop Services
 
 ```bash
-make docker-compose-down
+docker-compose down
 ```
 
 ## Playing Video Streams
@@ -254,21 +250,23 @@ ffplay "rtsp://your-stream-url"
 
 ```python
 class DahuaDSSClient:
-    def __init__(self, host: str, port: int = 8088, use_https: bool = False)
+    def __init__(self, host: str, port: int = 443, use_https: bool = True, disable_ssl_verify: bool = False)
     def login(self, username: str, password: str) -> bool
-    def logout(self) -> None
+    def logout(self) -> bool
+    def set_token(self, token: str) -> None
     def get_device_tree(self) -> Optional[List[Dict]]
-    def get_live_stream_url(self, channel_id: str, stream_type: int = 0) -> Optional[str]
-    def get_playback_stream_url(self, channel_id: str, start_time: str, end_time: str, stream_type: int = 0) -> Optional[str]
-    def search_recordings(self, channel_id: str, start_time: str, end_time: str) -> Optional[List[Dict]]
+    def get_live_stream_url(self, channel_id: str, stream_type: int = 1) -> Optional[str]
+    def get_playback_stream_url(self, channel_id: str, start_time: str, end_time: str, stream_type: int = 1, record_source: int = 2) -> Optional[str]
+    def search_recordings(self, channel_id: str, start_time: str, end_time: str, stream_type: int = 1, record_source: int = 2) -> Optional[List[Dict]]
 ```
 
 ## Requirements
 
-- Python 3.9+
-- requests >= 2.31.0
-- urllib3 >= 2.1.0
-- rich >= 13.7.0
+- Python 3.13+
+- requests >= 2.32.5
+- urllib3 >= 2.6.3
+- rich >= 14.2.0
+- python-dotenv >= 1.0.0
 
 ## Troubleshooting
 
