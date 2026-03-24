@@ -13,19 +13,19 @@ import argparse
 import json
 import logging
 import os
-import requests
 from datetime import datetime, timedelta
-from typing import Any, Optional, Dict, List, cast
-from rich.console import Console
-from rich.table import Table
-from rich.panel import Panel
-from rich.prompt import Prompt, Confirm
-from rich.tree import Tree
-from rich.progress import Progress, SpinnerColumn, TextColumn
-from rich import box
+from typing import Any, Dict, List, Optional, cast
+
+import requests
 import urllib3
 from dotenv import load_dotenv
-
+from rich import box
+from rich import print as rprint
+from rich.console import Console
+from rich.panel import Panel
+from rich.prompt import Confirm, Prompt
+from rich.table import Table
+from rich.tree import Tree
 
 # Try to load .env file if it exists (silent fail if not found)
 load_dotenv()
@@ -274,6 +274,9 @@ class DahuaDSSClient:
         console.print()
         console.print(tree)
         console.print()
+        # Save tree data to file
+        with open("device_tree.txt", "w") as f:
+            rprint(tree, file=f)
 
     def display_device_table(self, devices: List[Dict]) -> None:
         """
@@ -339,7 +342,7 @@ class DahuaDSSClient:
 
             data = response.json()
             # save data to file
-            with open("live_stream_hls.json", "w") as f:
+            with open(f"live_stream_hls_{channel_id}_{stream_type}.json", "w") as f:
                 json.dump(data, f, indent=2)
 
             if "data" not in data or data.get("code") != self.SUCCESS_CODE:
@@ -384,7 +387,7 @@ class DahuaDSSClient:
 
             data = response.json()
             # save data to file
-            with open("live_stream.json", "w") as f:
+            with open(f"live_stream_{channel_id}_{stream_type}.json", "w") as f:
                 json.dump(data, f, indent=2)
 
             if "data" not in data or data.get("code") != self.SUCCESS_CODE:
@@ -405,7 +408,7 @@ class DahuaDSSClient:
         raise NotImplementedError("Playback stream URL retrieval not implemented yet.")
 
     def search_recordings(
-        self, channel_id: str, start_time: str, end_time: str, stream_type: int = 1
+        self, channel_id: str, start_time: str, end_time: str, stream_type: int = 1, record_source: int = 3
     ) -> Optional[List[Dict]]:
         """
         Search for available recordings in a time period
@@ -415,6 +418,7 @@ class DahuaDSSClient:
             start_time: Start time in format "YYYY-MM-DD HH:MM:SS"
             end_time: End time in format "YYYY-MM-DD HH:MM:SS"
             stream_type: 1=Main stream, 2=Sub stream. In multi-screen mode, the value range is 0-1024
+            record_source: 2=Device, 3=Center
 
         Returns:
             List of recording segments
@@ -445,7 +449,7 @@ class DahuaDSSClient:
                     # 7: All-weather recording
                     # 8: File recording conversion
                     "recordType": "0",
-                    "recordSource": "3",  # 2: Device, 3: Center
+                    "recordSource": str(record_source),  # 2: Device, 3: Center
                     # "page": "",
                     # "session": ""
                 }
@@ -456,13 +460,13 @@ class DahuaDSSClient:
 
             data = response.json()
             # save data to file
-            with open("live_stream.json", "w") as f:
+            with open(f"recordings_{channel_id}_{start_time}_{end_time}_{stream_type}_{record_source}.json", "w") as f:
                 json.dump(data, f, indent=2)
 
             if "data" not in data or data.get("code") != self.SUCCESS_CODE:
                 console.print(f"[red]✗[/red] Error ({data['code']}): {data['desc']}", style="bold")
                 return None
-            return cast(Optional[List[Dict]], data["data"])
+            return cast(List[Dict], data["data"]["records"]) if "records" in data["data"] else []
         except requests.exceptions.RequestException as e:
             console.print(f"[red]✗[/red] Request error: {e}", style="bold")
             return None
@@ -478,7 +482,43 @@ class DahuaDSSClient:
             console.print("[yellow]No recordings found.[/yellow]")
             return
 
-        raise NotImplementedError("Recordings display not implemented yet.")
+        table = Table(show_header=True, box=box.SIMPLE, padding=(0, 2))
+        table.add_column("Channel Id", style="magenta")
+        table.add_column("Type", style="magenta")
+        table.add_column("Source", style="magenta")
+        table.add_column("Recording", style="cyan")
+        table.add_column("Start Time", style="cyan")
+        table.add_column("End Time", style="cyan")
+        table.add_column("Record Name", style="green")
+        table.add_column("Size (MB)", style="green")
+        table.add_column("Duration (s)", style="green")
+        # table.add_column("Plan Id", style="yellow")
+        # table.add_column("Storage Id", style="yellow")
+        # table.add_column("Disk Id", style="yellow")
+        # table.add_column("Stream Id", style="yellow")
+
+        for recording in recordings:
+            start_time = datetime.fromtimestamp(int(recording["startTime"]))
+            end_time = datetime.fromtimestamp(int(recording["endTime"]))
+            duration = int(recording["endTime"]) - int(recording["startTime"])
+            size_mb = int(recording.get("fileLength", 0)) / (1024 * 1024) if "fileLength" in recording else 0
+            table.add_row(
+                recording.get("channelId", "N/A"),
+                "Main" if recording.get("streamType") == "1" else recording.get("streamType", "N/A"),
+                "Device" if recording.get("recordSource") == "2" else "Center",
+                recording.get("recordType", "N/A"),
+                start_time.strftime("%Y-%m-%d %H:%M:%S"),
+                end_time.strftime("%Y-%m-%d %H:%M:%S"),
+                recording.get("recordName", "N/A"),
+                f"{size_mb:.2f}",
+                str(duration),
+                # recording.get("planId", "N/A"),
+                # recording.get("storageSvcId", "N/A"),
+                # recording.get("diskId", "N/A"),
+                # recording.get("streamId", "N/A"),
+            )
+
+        console.print(table)
 
 
 def show_banner() -> None:
@@ -559,7 +599,7 @@ def main() -> None:
         username = Prompt.ask("Username", default=DEFAULT_DSS_USER)
         if DEFAULT_DSS_PASSWORD:
             password = DEFAULT_DSS_PASSWORD
-            console.print(f"[dim]Using password from .env file[/dim]")
+            console.print("[dim]Using password from .env file[/dim]")
         else:
             password = Prompt.ask("Password", password=True)
         if not client.login(username, password):
@@ -621,10 +661,12 @@ def main() -> None:
                 start_time = Prompt.ask("Start time", default=default_start_time)
                 end_time = Prompt.ask("End time", default=default_end_time)
 
-                recordings = client.search_recordings(channel_id, start_time, end_time)
-                if recordings:
-                    client.display_recordings(recordings)
-                else:
+                recordings_dvc = client.search_recordings(channel_id, start_time, end_time, 1, 2)
+                recordings_ctr = client.search_recordings(channel_id, start_time, end_time, 1, 3)
+                if recordings_ctr + recordings_dvc:
+                    console.print("[bold blue]Recordings:[/bold blue]")
+                    client.display_recordings(recordings_ctr + recordings_dvc)
+                if not recordings_dvc and not recordings_ctr:
                     console.print("[yellow]No recordings found for the specified time range.[/yellow]")
 
             elif choice == "4":
