@@ -1,0 +1,50 @@
+[project]
+name = "dahua-dss-client"
+version = "1.0.0"
+description = "Interactive Python client for Dahua DSS Video Management System"
+authors = [{ name = "Borja Lafuente", email = "borlafu@gmail.com" }]
+license = "MIT"
+readme = "README.md"
+keywords = ["dahua", "dss", "video", "management", "surveillance", "rtsp"]
+requires-python = ">=3.13"
+dependencies = [
+    "requests >=2.32.5,<3.0.0",
+    "urllib3 >=2.6.3,<3.0.0",
+    "rich >=14.2.0,<15.0.0",
+
+]
+
+[project.scripts]
+dahua-dss = "dahua_dss.cli:main"
+
+[tool.poetry]
+packages = [{ include = "dahua_dss" }]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 120
+target-version = ['py313']
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+line_length = 120
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = "-v --cov=dahua_dss --cov-report=term-missing --cov-report=html"
+
+[tool.mypy]
+python_version = "3.13"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[dependency-groups]
+dev = ["types-requests (>=2.32.4.20260107,<3.0.0.0)"]
