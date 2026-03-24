@@ -265,15 +265,23 @@ def main() -> None:
                 console.print("\n[dim]Enter playback time range (format: YYYY-MM-DD HH:MM:SS)[/dim]")
                 start_time = Prompt.ask("Start time", default=default_start_time)
                 end_time = Prompt.ask("End time", default=default_end_time)
-                stream_type = Prompt.ask("Stream type", choices=["0", "1"], default="0")
-                stream_names = {"0": "Main Stream", "1": "Sub Stream"}
+                stream_type = Prompt.ask("Stream type", choices=["1", "2"], default="1")
+                record_source = Prompt.ask("Record source", choices=["2", "3"], default="3",
+                                           show_choices=True)
+                stream_names = {"1": "Main Stream", "2": "Sub Stream"}
+                source_names = {"2": "Device", "3": "Center"}
 
-                rtsp_url = client.get_playback_stream_url(channel_id, start_time, end_time, int(stream_type))
+                rtsp_url = client.get_playback_stream_url(
+                    channel_id, start_time, end_time,
+                    stream_type=int(stream_type),
+                    record_source=int(record_source),
+                )
                 if rtsp_url:
                     console.print()
                     console.print(Panel(
                         f"[bold cyan]Stream Type:[/bold cyan] {stream_names[stream_type]}\n"
                         f"[bold cyan]Channel ID:[/bold cyan] {channel_id}\n"
+                        f"[bold cyan]Source:[/bold cyan] {source_names[record_source]}\n"
                         f"[bold cyan]Time Range:[/bold cyan] {start_time} to {end_time}\n\n"
                         f"[bold green]RTSP URL:[/bold green]\n[yellow]{rtsp_url}[/yellow]\n\n"
                         f'[dim]• VLC: vlc "{rtsp_url}"[/dim]\n'

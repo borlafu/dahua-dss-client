@@ -1,6 +1,7 @@
 """Dahua DSS HTTP API client - data/service layer (no UI dependencies)"""
 
 import json
+import time
 from datetime import datetime
 from hashlib import md5
 from typing import Any, Dict, List, Optional, cast
@@ -55,6 +56,8 @@ class DahuaDSSClient:
 
         Returns True if successful, raises requests.exceptions.RequestException on network errors.
         """
+        import time
+
         try:
             response = self.session.post(
                 self.base_url + self.AUTH_ENDPOINT, json={"userName": username}, timeout=5
@@ -72,6 +75,12 @@ class DahuaDSSClient:
             response = self.session.post(self.base_url + self.AUTH_ENDPOINT, json=payload, timeout=5)
             response.raise_for_status()
             data = response.json()
+
+            # code 2004 = "user already logged in" (stale session on server).
+            # The session expires after `duration` seconds (typically 30s). Wait and retry once.
+            if data.get("code") == 2004:
+                time.sleep(31)
+                return self.login(username, password)
 
             if "token" not in data:
                 return False
@@ -175,12 +184,71 @@ class DahuaDSSClient:
         except requests.exceptions.RequestException:
             return None
 
+    PLAYBACK_ENDPOINT = "/brms/api/v1.0/SS/Playback/StartPlaybackByTime"
+
     def get_playback_stream_url(
-        self, channel_id: str, start_time: str, end_time: str, stream_type: int = 0
+        self,
+        channel_id: str,
+        start_time: str,
+        end_time: str,
+        stream_type: int = 1,
+        record_source: int = 3,
+        stream_id: Optional[str] = None,
     ) -> Optional[str]:
+        """
+        Get playback RTSP stream URL for a recorded time range.
+
+        Args:
+            channel_id: Channel code from device tree
+            start_time / end_time: "YYYY-MM-DD HH:MM:SS"
+            stream_type: 1=Main stream, 2=Sub stream
+            record_source: 2=Device, 3=Center
+            stream_id: Stream ID from search_recordings result. If None, auto-fetched.
+
+        Returns:
+            RTSP URL string (with token appended) or None on error.
+        """
         if not self.token:
             return None
-        raise NotImplementedError("Playback stream URL retrieval not implemented yet.")
+
+        # streamId is required by the API — auto-fetch from the first matching recording
+        if stream_id is None:
+            recordings = self.search_recordings(channel_id, start_time, end_time, stream_type, record_source)
+            if not recordings:
+                # fallback: try the other source
+                other_source = 2 if record_source == 3 else 3
+                recordings = self.search_recordings(channel_id, start_time, end_time, stream_type, other_source)
+                if recordings:
+                    record_source = other_source
+            stream_id = recordings[0]["streamId"] if recordings else ""
+
+        try:
+            start_ts = int(datetime.strptime(start_time, "%Y-%m-%d %H:%M:%S").timestamp())
+            end_ts = int(datetime.strptime(end_time, "%Y-%m-%d %H:%M:%S").timestamp())
+
+            payload: Dict[str, Any] = {
+                "data": {
+                    "channelId": channel_id,
+                    "startTime": str(start_ts),
+                    "endTime": str(end_ts),
+                    "streamType": str(stream_type),
+                    "recordType": "1",
+                    "recordSource": str(record_source),
+                    "streamId": stream_id,
+                }
+            }
+            response = self.session.post(
+                self.base_url + self.PLAYBACK_ENDPOINT, json=payload, timeout=15
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            if "data" not in data or data.get("code") != self.SUCCESS_CODE:
+                return None
+            return f"{data['data']['url']}?token={data['data']['token']}"
+
+        except requests.exceptions.RequestException:
+            return None
 
     def search_recordings(
         self, channel_id: str, start_time: str, end_time: str, stream_type: int = 1, record_source: int = 3

@@ -104,6 +104,26 @@ def test_login_unexpected_first_status(client: DahuaDSSClient) -> None:
     assert result is False
 
 
+def test_login_retries_after_2004(client: DahuaDSSClient) -> None:
+    """code 2004 (already logged in) waits for session expiry then retries successfully."""
+    challenge = {"realm": "dss", "randomKey": "rk1"}
+    already_logged_in = {"code": 2004, "desc": "The user has logged in."}
+    token_resp = {"token": "tok_retry"}
+
+    with patch("dahua_dss.client.time.sleep") as mock_sleep, \
+         patch.object(client.session, "post", side_effect=[
+             _make_response(401, challenge),        # login step 1
+             _make_response(200, already_logged_in), # login step 2 → 2004
+             _make_response(401, challenge),         # retry login step 1
+             _make_response(200, token_resp),        # retry login step 2
+         ]):
+        result = client.login("admin", "secret")
+
+    assert result is True
+    assert client.token == "tok_retry"
+    mock_sleep.assert_called_once_with(31)
+
+
 # ---------------------------------------------------------------------------
 # logout
 # ---------------------------------------------------------------------------
@@ -248,3 +268,98 @@ def test_search_recordings_api_error(client: DahuaDSSClient, tmp_path, monkeypat
         result = client.search_recordings("ch1", "2025-01-01 00:00:00", "2025-01-01 01:00:00")
 
     assert result is None
+
+
+# ---------------------------------------------------------------------------
+# get_playback_stream_url
+# ---------------------------------------------------------------------------
+
+def test_get_playback_stream_url_not_authenticated(client: DahuaDSSClient) -> None:
+    assert client.get_playback_stream_url("ch1", "2025-01-01 00:00:00", "2025-01-01 01:00:00") is None
+
+
+def test_get_playback_stream_url_success(client: DahuaDSSClient, tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    client.set_token("tok")
+    # search_recordings returns one record with streamId
+    search_resp = _make_response(200, {
+        "code": DahuaDSSClient.SUCCESS_CODE,
+        "data": {"records": [{"streamId": "112", "startTime": "1735689600", "endTime": "1735693200"}]},
+    })
+    playback_resp = _make_response(200, {
+        "code": DahuaDSSClient.SUCCESS_CODE,
+        "data": {"url": "rtsp://host/playback", "token": "pb_tok"},
+    })
+
+    with patch.object(client.session, "post", side_effect=[search_resp, playback_resp]) as mock_post:
+        url = client.get_playback_stream_url(
+            "ch1", "2025-01-01 00:00:00", "2025-01-01 01:00:00",
+            stream_type=1, record_source=2,
+        )
+
+    assert url == "rtsp://host/playback?token=pb_tok"
+    playback_body = mock_post.call_args[1]["json"]["data"]
+    assert playback_body["streamId"] == "112"
+    assert playback_body["channelId"] == "ch1"
+
+
+def test_get_playback_stream_url_explicit_stream_id(client: DahuaDSSClient, tmp_path, monkeypatch) -> None:
+    """When stream_id is provided explicitly, no search_recordings call is made."""
+    monkeypatch.chdir(tmp_path)
+    client.set_token("tok")
+    resp = _make_response(200, {
+        "code": DahuaDSSClient.SUCCESS_CODE,
+        "data": {"url": "rtsp://host/playback", "token": "pb_tok"},
+    })
+
+    with patch.object(client.session, "post", return_value=resp) as mock_post:
+        url = client.get_playback_stream_url(
+            "ch1", "2025-01-01 00:00:00", "2025-01-01 01:00:00", stream_id="999"
+        )
+
+    assert url == "rtsp://host/playback?token=pb_tok"
+    assert mock_post.call_count == 1  # only the playback call, no search
+    assert mock_post.call_args[1]["json"]["data"]["streamId"] == "999"
+
+
+def test_get_playback_stream_url_fallback_source(client: DahuaDSSClient, tmp_path, monkeypatch) -> None:
+    """Falls back to the other record_source when primary returns no recordings."""
+    monkeypatch.chdir(tmp_path)
+    client.set_token("tok")
+    empty_search = _make_response(200, {"code": DahuaDSSClient.SUCCESS_CODE, "data": {}})
+    fallback_search = _make_response(200, {
+        "code": DahuaDSSClient.SUCCESS_CODE,
+        "data": {"records": [{"streamId": "77", "startTime": "1735689600", "endTime": "1735693200"}]},
+    })
+    playback_resp = _make_response(200, {
+        "code": DahuaDSSClient.SUCCESS_CODE,
+        "data": {"url": "rtsp://host/pb", "token": "t"},
+    })
+
+    with patch.object(client.session, "post", side_effect=[empty_search, fallback_search, playback_resp]):
+        url = client.get_playback_stream_url("ch1", "2025-01-01 00:00:00", "2025-01-01 01:00:00", record_source=3)
+
+    assert url == "rtsp://host/pb?token=t"
+
+
+def test_get_playback_stream_url_api_error(client: DahuaDSSClient, tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    client.set_token("tok")
+    search_resp = _make_response(200, {
+        "code": DahuaDSSClient.SUCCESS_CODE,
+        "data": {"records": [{"streamId": "1", "startTime": "1735689600", "endTime": "1735693200"}]},
+    })
+    error_resp = _make_response(200, {"code": 9999, "desc": "error"})
+
+    with patch.object(client.session, "post", side_effect=[search_resp, error_resp]):
+        url = client.get_playback_stream_url("ch1", "2025-01-01 00:00:00", "2025-01-01 01:00:00")
+
+    assert url is None
+
+
+def test_get_playback_stream_url_network_error(client: DahuaDSSClient) -> None:
+    client.set_token("tok")
+    with patch.object(client.session, "post", side_effect=requests.exceptions.ConnectionError):
+        url = client.get_playback_stream_url("ch1", "2025-01-01 00:00:00", "2025-01-01 01:00:00", stream_id="1")
+
+    assert url is None
