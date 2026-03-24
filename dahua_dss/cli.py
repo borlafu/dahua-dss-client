@@ -12,6 +12,7 @@ This script provides an interactive interface to:
 import argparse
 import json
 import logging
+import os
 import requests
 from datetime import datetime
 from typing import Any, Optional, Dict, List
@@ -23,10 +24,17 @@ from rich.tree import Tree
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich import box
 import urllib3
+from dotenv import load_dotenv
 
 
-DEFAULT_DSS_HOST = "lnkuu-84-199-49-194.a.free.pinggy.link"  # "ocsquantum.a.pinggy.link"
-DEFAULT_DSS_USER = "monitor"
+# Try to load .env file if it exists (silent fail if not found)
+load_dotenv()
+
+DEFAULT_DSS_HOST = os.getenv("DSS_HOST", "lnkuu-84-199-49-194.a.free.pinggy.link")  # "ocsquantum.a.pinggy.link"
+DEFAULT_DSS_USER = os.getenv("DSS_USER", "monitor")
+DEFAULT_DSS_PORT = os.getenv("DSS_PORT", "443")
+DEFAULT_DSS_USE_HTTPS = os.getenv("DSS_USE_HTTPS", "true").lower() in ("true", "1", "yes")
+DEFAULT_DSS_PASSWORD = os.getenv("DSS_PASSWORD", "")
 
 # Initialize Rich console
 console = Console()
@@ -472,9 +480,10 @@ def main() -> None:
     console.print("[bold cyan]Connection Setup[/bold cyan]")
     console.print()
 
+    # Use defaults from .env file if available, otherwise prompt
     host = Prompt.ask("Enter DSS server IP/hostname", default=DEFAULT_DSS_HOST)
-    use_https = Confirm.ask("Use HTTPS?", default=True)
-    port = Prompt.ask("Enter DSS server port", default="443" if use_https else "80")
+    use_https = Confirm.ask("Use HTTPS?", default=DEFAULT_DSS_USE_HTTPS)
+    port = Prompt.ask("Enter DSS server port", default=DEFAULT_DSS_PORT)
 
     # Create client
     client = DahuaDSSClient(host, int(port), use_https)
@@ -483,10 +492,14 @@ def main() -> None:
     console.print("[bold cyan]Authentication[/bold cyan]")
     console.print()
 
-    # Login
+    # Login - use password from .env if available, otherwise prompt
     if not args.token:
         username = Prompt.ask("Username", default=DEFAULT_DSS_USER)
-        password = Prompt.ask("Password", password=True)
+        if DEFAULT_DSS_PASSWORD:
+            password = DEFAULT_DSS_PASSWORD
+            console.print(f"[dim]Using password from .env file[/dim]")
+        else:
+            password = Prompt.ask("Password", password=True)
         if not client.login(username, password):
             return
     else:
