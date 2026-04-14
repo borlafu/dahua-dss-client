@@ -9,6 +9,8 @@ from typing import Any, Dict, List, Optional, cast
 import requests
 import urllib3
 
+from dahua_dss.models import DssDeviceCategory, DssPlaybackRecordType, DssRecordSource, DssRecordType, DssStreamType
+
 
 class DahuaDSSClient:
     """Client for Dahua DSS HTTP API"""
@@ -116,7 +118,7 @@ class DahuaDSSClient:
 
         try:
             payload: Dict[str, Any] = {
-                "categories": ["1"],
+                "categories": [DssDeviceCategory.Encoder],
                 "containVirtualDevice": "1",
                 "resourceTypes": [],
             }
@@ -132,7 +134,7 @@ class DahuaDSSClient:
         except requests.exceptions.RequestException:
             return None
 
-    def get_live_stream_url(self, channel_id: str, stream_type: int = 1) -> Optional[str]:
+    def get_live_stream_url(self, channel_id: str, stream_type: DssStreamType = DssStreamType.Main) -> Optional[str]:
         """
         Get live RTSP stream URL for a channel.
 
@@ -163,7 +165,7 @@ class DahuaDSSClient:
         except requests.exceptions.RequestException:
             return None
 
-    def get_live_stream_hls_url(self, channel_id: str, stream_type: int = 1) -> Optional[str]:
+    def get_live_stream_hls_url(self, channel_id: str, stream_type: DssStreamType = DssStreamType.Main) -> Optional[str]:
         """Get live HLS stream URL for a channel."""
         if not self.token:
             return None
@@ -191,8 +193,8 @@ class DahuaDSSClient:
         channel_id: str,
         start_time: str,
         end_time: str,
-        stream_type: int = 1,
-        record_source: int = 3,
+        stream_type: DssStreamType = DssStreamType.Main,
+        record_source: DssRecordSource = DssRecordSource.Center,
         stream_id: Optional[str] = None,
     ) -> Optional[str]:
         """
@@ -216,7 +218,7 @@ class DahuaDSSClient:
             recordings = self.search_recordings(channel_id, start_time, end_time, stream_type, record_source)
             if not recordings:
                 # fallback: try the other source
-                other_source = 2 if record_source == 3 else 3
+                other_source = DssRecordSource.Device if record_source == DssRecordSource.Center else DssRecordSource.Center
                 recordings = self.search_recordings(channel_id, start_time, end_time, stream_type, other_source)
                 if recordings:
                     record_source = other_source
@@ -231,9 +233,9 @@ class DahuaDSSClient:
                     "channelId": channel_id,
                     "startTime": str(start_ts),
                     "endTime": str(end_ts),
-                    "streamType": str(stream_type),
-                    "recordType": "1",
-                    "recordSource": str(record_source),
+                    "streamType": stream_type,
+                    "recordType": DssPlaybackRecordType.General,
+                    "recordSource": record_source,
                     "streamId": stream_id,
                 }
             }
@@ -251,15 +253,15 @@ class DahuaDSSClient:
             return None
 
     def search_recordings(
-        self, channel_id: str, start_time: str, end_time: str, stream_type: int = 1, record_source: int = 3
+        self, channel_id: str, start_time: str, end_time: str, stream_type: DssStreamType = DssStreamType.Main, record_source: DssRecordSource = DssRecordSource.Center
     ) -> Optional[List[Dict[str, Any]]]:
         """
         Search for available recordings in a time period.
 
         Args:
             start_time / end_time: "YYYY-MM-DD HH:MM:SS"
-            stream_type: 1=Main, 2=Sub
-            record_source: 2=Device, 3=Center
+            stream_type: Main or Sub stream
+            record_source: Device or Center
 
         Returns list of recording dicts or None on error.
         """
@@ -275,9 +277,9 @@ class DahuaDSSClient:
                     "endTime": end_ts,
                     "startTime": start_ts,
                     "channelId": channel_id,
-                    "streamType": str(stream_type),
-                    "recordType": "0",
-                    "recordSource": str(record_source),
+                    "streamType": stream_type,
+                    "recordType": DssRecordType.All,
+                    "recordSource": record_source,
                 }
             }
             response = self.session.post(self.base_url + self.QUERY_RECORDS_ENDPOINT, json=payload, timeout=15)
