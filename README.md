@@ -9,7 +9,7 @@ A modern, interactive Python client for the Dahua DSS (Data Security Service) Vi
 
 - 🔐 **Authentication** - Secure login to Dahua DSS systems
 - 📹 **Device Management** - Browse video-capable devices in a tree or table view
-- 🔴 **Live Streaming** - Get RTSP URLs for live video streams
+- 🔴 **Live Streaming** - Get RTSP/HLS URLs for live video streams
 - ▶️ **Playback** - Access recorded video streams for specific time periods
 - 🔍 **Recording Search** - Find available recordings with detailed information
 - 🎨 **Beautiful UI** - Rich terminal interface with colors, tables, and progress indicators
@@ -20,14 +20,9 @@ A modern, interactive Python client for the Dahua DSS (Data Security Service) Vi
 ### Using Poetry (Recommended)
 
 ```bash
-# Clone the repository
 git clone https://github.com/borlafu/dahua-dss-client.git
 cd dahua-dss-client
-
-# Install dependencies
 poetry install
-
-# Run the application
 poetry run dahua-dss
 ```
 
@@ -40,23 +35,15 @@ pip install dahua-dss-client
 ### Using Docker
 
 ```bash
-# Build the image
 docker build -t dahua-dss-client .
-
-# Run interactively
 docker run -it --rm dahua-dss-client
 ```
 
 ### Using Docker Compose
 
 ```bash
-# Copy environment template
 cp .env.example .env
-
 # Edit .env with your DSS credentials
-nano .env
-
-# Run interactively
 docker compose run --rm dahua-dss
 ```
 
@@ -65,79 +52,45 @@ docker compose run --rm dahua-dss
 ### Interactive Mode
 
 ```bash
-# Using Poetry
 poetry run dahua-dss
-
-# Using installed package
+# or, if installed via pip:
 dahua-dss
-
-# Using Docker
-docker run -it --rm dahua-dss-client
 ```
 
 ### Programmatic Usage
 
 ```python
-from dahua_dss import DahuaDSSClient
+from dahua_dss import DahuaDSSClient, DssStreamType, DssRecordSource
 
-# Create client
 client = DahuaDSSClient("192.168.1.100", port=443, use_https=True)
 
-# Login
 if client.login("admin", "password"):
     # Get devices
     devices = client.get_device_tree()
 
-    # Get live stream (stream_type: 1=Main, 2=Sub)
-    rtsp_url = client.get_live_stream_url("channel_id", stream_type=1)
+    # Get live stream URL
+    rtsp_url = client.get_live_stream_url("channel_id", stream_type=DssStreamType.Main)
 
-    # Get playback stream
+    # Search recordings
+    recordings = client.search_recordings(
+        "channel_id",
+        "2025-11-25 00:00:00",
+        "2025-11-25 01:00:00",
+        stream_type=DssStreamType.Main,
+        record_source=DssRecordSource.Center,
+    )
+
+    # Get playback stream URL
     playback_url = client.get_playback_stream_url(
         "channel_id",
         "2025-11-25 00:00:00",
         "2025-11-25 01:00:00",
-        stream_type=1,
-        record_source=2,
+        stream_type=DssStreamType.Main,
+        record_source=DssRecordSource.Center,
     )
 
-    # Logout
     client.logout()
 ```
-
-## Usage
-
-### 1. Authentication
-
-When you run the application, you'll be prompted for:
-- DSS server IP/hostname
-- Port (default: 443)
-- Whether to use HTTPS (default: yes)
-- Username and password
-
-### 2. Main Menu Options
-
-**Option 1: Get Device Tree**
-- Lists all video-capable devices and channels
-- Choose between tree view (hierarchical) or table view
-- Shows device status, type, and channel information
-
-**Option 2: Get Live Stream URL**
-- Select a channel ID from the device tree
-- Choose stream type (Main/Sub)
-- Receive RTSP URL for live viewing
-
-**Option 3: Search Recordings**
-- Enter channel ID and time range
-- View available recordings with duration and file size
-- See recording segments in a formatted table
-
-**Option 4: Get Playback Stream URL**
-- Select channel ID and time range
-- Choose stream type and record source
-- Receive RTSP URL for playback
-
-**Option 5: Logout and Exit**
-- Cleanly terminates the session
 
 ## Configuration
 
@@ -155,92 +108,31 @@ DSS_USE_HTTPS=true
 
 ### Stream Types
 
-- **1** - Main Stream (High quality, higher bandwidth)
-- **2** - Sub Stream (Lower quality, lower bandwidth)
+| Enum | Value | Description |
+|------|-------|-------------|
+| `DssStreamType.Main` | `1` | Main stream — high quality, higher bandwidth |
+| `DssStreamType.Sub` | `2` | Sub stream — lower quality, lower bandwidth |
 
 ### Record Sources
 
-- **2** - Device (recording stored on the device)
-- **3** - Center (recording stored on the DSS server)
+| Enum | Value | Description |
+|------|-------|-------------|
+| `DssRecordSource.Device` | `2` | Recording stored on the device |
+| `DssRecordSource.Center` | `3` | Recording stored on the DSS server |
 
-## Development
+## Interactive Usage
 
-### Setup Development Environment
+When you run the application, you'll be prompted for the DSS server IP/hostname, port (default: 443), HTTPS (default: yes), and credentials.
 
-```bash
-# Install with dev dependencies
-poetry install
+### Main Menu
 
-# Activate virtual environment
-poetry shell
-```
-
-### Run Tests
-
-```bash
-# Run all tests
-poetry run pytest
-
-# Run with coverage report
-poetry run pytest --cov=dahua_dss --cov-report=term-missing
-```
-
-### Code Quality
-
-```bash
-# Format code
-poetry run black dahua_dss tests
-
-# Sort imports
-poetry run isort dahua_dss tests
-
-# Type checking
-poetry run mypy dahua_dss
-```
-
-## Docker
-
-### Build Image
-
-```bash
-docker build -t dahua-dss-client .
-```
-
-### Run Container
-
-```bash
-# Interactive mode
-docker run -it --rm dahua-dss-client
-
-# With docker compose
-docker compose run --rm dahua-dss
-```
-
-## Playing Video Streams
-
-Once you have an RTSP URL, you can play it with various tools:
-
-### VLC Media Player
-
-```bash
-vlc "rtsp://your-stream-url"
-```
-
-### FFmpeg (Save to file)
-
-```bash
-ffmpeg -i "rtsp://your-stream-url" -c copy output.mp4
-```
-
-### FFplay (Quick preview)
-
-```bash
-ffplay "rtsp://your-stream-url"
-```
+1. **Get Device Tree** — lists all video-capable devices and channels in tree or table view
+2. **Get Live Stream URL** — returns an RTSP URL for a channel
+3. **Search Recordings** — find recordings in a time range with duration and file size
+4. **Get Playback Stream URL** — returns an RTSP URL for a recorded time range
+5. **Logout and Exit**
 
 ## API Reference
-
-### DahuaDSSClient
 
 ```python
 class DahuaDSSClient:
@@ -249,9 +141,42 @@ class DahuaDSSClient:
     def logout(self) -> bool
     def set_token(self, token: str) -> None
     def get_device_tree(self) -> Optional[List[Dict]]
-    def get_live_stream_url(self, channel_id: str, stream_type: int = 1) -> Optional[str]
-    def get_playback_stream_url(self, channel_id: str, start_time: str, end_time: str, stream_type: int = 1, record_source: int = 2) -> Optional[str]
-    def search_recordings(self, channel_id: str, start_time: str, end_time: str, stream_type: int = 1, record_source: int = 2) -> Optional[List[Dict]]
+    def get_live_stream_url(self, channel_id: str, stream_type: DssStreamType = DssStreamType.Main) -> Optional[str]
+    def get_live_stream_hls_url(self, channel_id: str, stream_type: DssStreamType = DssStreamType.Main) -> Optional[str]
+    def get_playback_stream_url(self, channel_id: str, start_time: str, end_time: str, stream_type: DssStreamType = DssStreamType.Main, record_source: DssRecordSource = DssRecordSource.Center, stream_id: Optional[str] = None) -> Optional[str]
+    def search_recordings(self, channel_id: str, start_time: str, end_time: str, stream_type: DssStreamType = DssStreamType.Main, record_source: DssRecordSource = DssRecordSource.Center) -> Optional[List[Dict]]
+```
+
+Time parameters use the format `"YYYY-MM-DD HH:MM:SS"`.
+
+## Playing Video Streams
+
+```bash
+# VLC
+vlc "rtsp://your-stream-url"
+
+# FFmpeg (save to file)
+ffmpeg -i "rtsp://your-stream-url" -c copy output.mp4
+
+# FFplay (quick preview)
+ffplay "rtsp://your-stream-url"
+```
+
+## Development
+
+```bash
+# Install with dev dependencies
+poetry install
+
+# Run tests
+poetry run pytest
+
+# Format code
+poetry run black dahua_dss tests
+poetry run isort dahua_dss tests
+
+# Type checking
+poetry run mypy dahua_dss
 ```
 
 ## Requirements
@@ -264,42 +189,27 @@ class DahuaDSSClient:
 
 ## Troubleshooting
 
-### SSL Certificate Errors
+**SSL Certificate Errors** — the client disables SSL verification automatically. For production, configure proper certificates on your DSS server.
 
-If you encounter SSL certificate errors, the client automatically disables SSL verification. For production use, ensure proper SSL certificates are configured on your DSS server.
+**Connection Timeout** — check network connectivity to the DSS server.
 
-### Connection Timeout
-
-Increase timeout values in the client initialization or check network connectivity to the DSS server.
-
-### Authentication Failed
-
-- Verify credentials are correct
-- Check if the user has API access permissions
-- Ensure the DSS server API is enabled
+**Authentication Failed** — verify credentials, API access permissions, and that the DSS server API is enabled.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
-
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+2. Create your feature branch (`git checkout -b feat/my-feature`)
+3. Commit your changes using [Conventional Commits](https://www.conventionalcommits.org/) (e.g. `feat: add X`, `fix: correct Y`)
+4. Push and open a Pull Request
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT — see [LICENSE](LICENSE).
 
 ## Acknowledgments
 
 - Built with [Rich](https://github.com/Textualize/rich) for beautiful terminal UI
 - Supports Dahua DSS HTTP API v8.7
-
-## Support
-
-For issues, questions, or contributions, please open an issue on GitHub.
 
 ---
 
