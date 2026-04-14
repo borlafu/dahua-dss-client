@@ -18,6 +18,7 @@ from dahua_dss.cli import (
 # get_default_time_range
 # ---------------------------------------------------------------------------
 
+
 def test_get_default_time_range_format() -> None:
     start, end = get_default_time_range()
     datetime.strptime(start, "%Y-%m-%d %H:%M:%S")
@@ -35,17 +36,30 @@ def test_get_default_time_range_24h_gap() -> None:
 # ---------------------------------------------------------------------------
 
 DEVICE_ONLINE = {
-    "name": "Cam1", "status": "1", "category": "IPC", "type": "IPC",
-    "code": "DEV001", "sourceType": "1", "deviceModelStr": "X", "model": "Y",
-    "orgCode": "ORG1", "units": [],
+    "name": "Cam1",
+    "status": "1",
+    "category": "IPC",
+    "type": "IPC",
+    "code": "DEV001",
+    "sourceType": "1",
+    "deviceModelStr": "X",
+    "model": "Y",
+    "orgCode": "ORG1",
+    "units": [],
 }
 DEVICE_OFFLINE = {**DEVICE_ONLINE, "status": "0", "name": "Cam2"}
 DEVICE_WITH_CHANNELS = {
     **DEVICE_ONLINE,
-    "units": [{"unitType": "Video", "unitSeq": "0", "assistStream": "0",
-               "zeroChnEncode": "0", "streamType": "1",
-               "channels": [{"channelName": "Ch1", "channelCode": "CH001",
-                              "channelSeq": "0", "status": "1"}]}],
+    "units": [
+        {
+            "unitType": "Video",
+            "unitSeq": "0",
+            "assistStream": "0",
+            "zeroChnEncode": "0",
+            "streamType": "1",
+            "channels": [{"channelName": "Ch1", "channelCode": "CH001", "channelSeq": "0", "status": "1"}],
+        }
+    ],
 }
 
 
@@ -78,6 +92,7 @@ def test_display_device_tree_with_channels() -> None:
 # ---------------------------------------------------------------------------
 # display_device_table
 # ---------------------------------------------------------------------------
+
 
 def test_display_device_table_empty() -> None:
     with patch("dahua_dss.cli.console") as mock_console:
@@ -138,6 +153,7 @@ def test_display_recordings_missing_file_length() -> None:
 # main() — integration via mocked client + prompts
 # ---------------------------------------------------------------------------
 
+
 def _mock_client() -> MagicMock:
     client = MagicMock()
     client.login.return_value = True
@@ -146,7 +162,6 @@ def _mock_client() -> MagicMock:
     client.search_recordings.return_value = [RECORDING]
     client.get_playback_stream_url.return_value = "rtsp://example.com/playback"
     return client
-
 
 
 ARGV_EMPTY = patch("sys.argv", ["dahua-dss"])
@@ -194,8 +209,11 @@ def test_main_choice_1_tree(mock_prompt: MagicMock, mock_confirm: MagicMock, moc
     client = _mock_client()
     mock_cls.return_value = client
 
-    with patch("dahua_dss.cli.console"), patch("builtins.open", mock_open()), \
-         patch("dahua_dss.cli.DEFAULT_DSS_PASSWORD", "secret"):
+    with (
+        patch("dahua_dss.cli.console"),
+        patch("builtins.open", mock_open()),
+        patch("dahua_dss.cli.DEFAULT_DSS_PASSWORD", "secret"),
+    ):
         main()
 
     client.get_device_tree.assert_called_once()
@@ -235,7 +253,9 @@ def test_main_choice_2_live_stream(mock_prompt: MagicMock, mock_confirm: MagicMo
 @patch("dahua_dss.cli.DahuaDSSClient")
 @patch("dahua_dss.cli.Confirm.ask", return_value=False)
 @patch("dahua_dss.cli.Prompt.ask")
-def test_main_choice_2_live_stream_failure(mock_prompt: MagicMock, mock_confirm: MagicMock, mock_cls: MagicMock) -> None:
+def test_main_choice_2_live_stream_failure(
+    mock_prompt: MagicMock, mock_confirm: MagicMock, mock_cls: MagicMock
+) -> None:
     mock_prompt.side_effect = ["host", "8088", "user", "2", "CH001", "1", "5"]
     client = _mock_client()
     client.get_live_stream_url.return_value = None
@@ -251,8 +271,13 @@ def test_main_choice_2_live_stream_failure(mock_prompt: MagicMock, mock_confirm:
 @patch("dahua_dss.cli.Prompt.ask")
 def test_main_choice_3_search_recordings(mock_prompt: MagicMock, mock_confirm: MagicMock, mock_cls: MagicMock) -> None:
     mock_prompt.side_effect = [
-        "host", "8088", "user",
-        "3", "CH001", "2026-01-01 00:00:00", "2026-01-02 00:00:00",
+        "host",
+        "8088",
+        "user",
+        "3",
+        "CH001",
+        "2026-01-01 00:00:00",
+        "2026-01-02 00:00:00",
         "5",
     ]
     client = _mock_client()
@@ -272,8 +297,15 @@ def test_main_choice_3_search_recordings(mock_prompt: MagicMock, mock_confirm: M
 @patch("dahua_dss.cli.Prompt.ask")
 def test_main_choice_4_playback(mock_prompt: MagicMock, mock_confirm: MagicMock, mock_cls: MagicMock) -> None:
     mock_prompt.side_effect = [
-        "host", "8088", "user",
-        "4", "CH001", "2026-01-01 00:00:00", "2026-01-02 00:00:00", "1", "3",
+        "host",
+        "8088",
+        "user",
+        "4",
+        "CH001",
+        "2026-01-01 00:00:00",
+        "2026-01-02 00:00:00",
+        "1",
+        "3",
         "5",
     ]
     client = _mock_client()
@@ -283,8 +315,11 @@ def test_main_choice_4_playback(mock_prompt: MagicMock, mock_confirm: MagicMock,
         main()
 
     client.get_playback_stream_url.assert_called_once_with(
-        "CH001", "2026-01-01 00:00:00", "2026-01-02 00:00:00",
-        stream_type=1, record_source=3,
+        "CH001",
+        "2026-01-01 00:00:00",
+        "2026-01-02 00:00:00",
+        stream_type=1,
+        record_source=3,
     )
 
 

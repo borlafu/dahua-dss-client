@@ -45,7 +45,9 @@ def display_device_tree(devices: List[Dict]) -> None:
         device_node = tree.add(f"🖥️  {device_label}")
         device_node.add(f"[dim]Code: {device.get('code', 'Unknown')}[/dim]")
         device_node.add(f"[dim]Source Type: {source_type}[/dim]")
-        device_node.add(f"[dim]Model: {device.get('deviceModelStr', 'Unknown')} ({device.get('model', 'Unknown')})[/dim]")
+        device_node.add(
+            f"[dim]Model: {device.get('deviceModelStr', 'Unknown')} ({device.get('model', 'Unknown')})[/dim]"
+        )
         device_node.add(f"[dim]Org Code: {device.get('orgCode', 'Unknown')}[/dim]")
 
         units = device.get("units", [])
@@ -232,14 +234,17 @@ def main() -> None:
                 rtsp_url = client.get_live_stream_url(channel_id, int(stream_type))
                 if rtsp_url:
                     console.print()
-                    console.print(Panel(
-                        f"[bold cyan]Stream Type:[/bold cyan] {stream_names[stream_type]}\n"
-                        f"[bold cyan]Channel ID:[/bold cyan] {channel_id}\n\n"
-                        f"[bold green]RTSP URL:[/bold green]\n[yellow]{rtsp_url}[/yellow]\n\n"
-                        f'[dim]• VLC: vlc "{rtsp_url}"[/dim]\n'
-                        f'[dim]• FFmpeg: ffmpeg -i "{rtsp_url}" -c copy output.mp4[/dim]',
-                        title="🔴 [bold]Live Stream URL[/bold]", border_style="green",
-                    ))
+                    console.print(
+                        Panel(
+                            f"[bold cyan]Stream Type:[/bold cyan] {stream_names[stream_type]}\n"
+                            f"[bold cyan]Channel ID:[/bold cyan] {channel_id}\n\n"
+                            f"[bold green]RTSP URL:[/bold green]\n[yellow]{rtsp_url}[/yellow]\n\n"
+                            f'[dim]• VLC: vlc "{rtsp_url}"[/dim]\n'
+                            f'[dim]• FFmpeg: ffmpeg -i "{rtsp_url}" -c copy output.mp4[/dim]',
+                            title="🔴 [bold]Live Stream URL[/bold]",
+                            border_style="green",
+                        )
+                    )
                 else:
                     console.print("[red]✗[/red] Failed to get live stream URL.")
 
@@ -266,28 +271,32 @@ def main() -> None:
                 start_time = Prompt.ask("Start time", default=default_start_time)
                 end_time = Prompt.ask("End time", default=default_end_time)
                 stream_type = Prompt.ask("Stream type", choices=["1", "2"], default="1")
-                record_source = Prompt.ask("Record source", choices=["2", "3"], default="3",
-                                           show_choices=True)
+                record_source = Prompt.ask("Record source", choices=["2", "3"], default="3", show_choices=True)
                 stream_names = {"1": "Main Stream", "2": "Sub Stream"}
                 source_names = {"2": "Device", "3": "Center"}
 
                 rtsp_url = client.get_playback_stream_url(
-                    channel_id, start_time, end_time,
+                    channel_id,
+                    start_time,
+                    end_time,
                     stream_type=int(stream_type),
                     record_source=int(record_source),
                 )
                 if rtsp_url:
                     console.print()
-                    console.print(Panel(
-                        f"[bold cyan]Stream Type:[/bold cyan] {stream_names[stream_type]}\n"
-                        f"[bold cyan]Channel ID:[/bold cyan] {channel_id}\n"
-                        f"[bold cyan]Source:[/bold cyan] {source_names[record_source]}\n"
-                        f"[bold cyan]Time Range:[/bold cyan] {start_time} to {end_time}\n\n"
-                        f"[bold green]RTSP URL:[/bold green]\n[yellow]{rtsp_url}[/yellow]\n\n"
-                        f'[dim]• VLC: vlc "{rtsp_url}"[/dim]\n'
-                        f'[dim]• FFmpeg: ffmpeg -i "{rtsp_url}" -c copy playback.mp4[/dim]',
-                        title="▶️  [bold]Playback Stream URL[/bold]", border_style="green",
-                    ))
+                    console.print(
+                        Panel(
+                            f"[bold cyan]Stream Type:[/bold cyan] {stream_names[stream_type]}\n"
+                            f"[bold cyan]Channel ID:[/bold cyan] {channel_id}\n"
+                            f"[bold cyan]Source:[/bold cyan] {source_names[record_source]}\n"
+                            f"[bold cyan]Time Range:[/bold cyan] {start_time} to {end_time}\n\n"
+                            f"[bold green]RTSP URL:[/bold green]\n[yellow]{rtsp_url}[/yellow]\n\n"
+                            f'[dim]• VLC: vlc "{rtsp_url}"[/dim]\n'
+                            f'[dim]• FFmpeg: ffmpeg -i "{rtsp_url}" -c copy playback.mp4[/dim]',
+                            title="▶️  [bold]Playback Stream URL[/bold]",
+                            border_style="green",
+                        )
+                    )
                 else:
                     console.print("[red]✗[/red] Failed to get playback stream URL.")
 

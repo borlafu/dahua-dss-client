@@ -61,9 +61,7 @@ class DahuaDSSClient:
         import time
 
         try:
-            response = self.session.post(
-                self.base_url + self.AUTH_ENDPOINT, json={"userName": username}, timeout=5
-            )
+            response = self.session.post(self.base_url + self.AUTH_ENDPOINT, json={"userName": username}, timeout=5)
             if response.status_code != 401:
                 response.raise_for_status()
                 return False
@@ -165,7 +163,9 @@ class DahuaDSSClient:
         except requests.exceptions.RequestException:
             return None
 
-    def get_live_stream_hls_url(self, channel_id: str, stream_type: DssStreamType = DssStreamType.Main) -> Optional[str]:
+    def get_live_stream_hls_url(
+        self, channel_id: str, stream_type: DssStreamType = DssStreamType.Main
+    ) -> Optional[str]:
         """Get live HLS stream URL for a channel."""
         if not self.token:
             return None
@@ -218,7 +218,9 @@ class DahuaDSSClient:
             recordings = self.search_recordings(channel_id, start_time, end_time, stream_type, record_source)
             if not recordings:
                 # fallback: try the other source
-                other_source = DssRecordSource.Device if record_source == DssRecordSource.Center else DssRecordSource.Center
+                other_source = (
+                    DssRecordSource.Device if record_source == DssRecordSource.Center else DssRecordSource.Center
+                )
                 recordings = self.search_recordings(channel_id, start_time, end_time, stream_type, other_source)
                 if recordings:
                     record_source = other_source
@@ -239,9 +241,7 @@ class DahuaDSSClient:
                     "streamId": stream_id,
                 }
             }
-            response = self.session.post(
-                self.base_url + self.PLAYBACK_ENDPOINT, json=payload, timeout=15
-            )
+            response = self.session.post(self.base_url + self.PLAYBACK_ENDPOINT, json=payload, timeout=15)
             response.raise_for_status()
             data = response.json()
 
@@ -253,7 +253,12 @@ class DahuaDSSClient:
             return None
 
     def search_recordings(
-        self, channel_id: str, start_time: str, end_time: str, stream_type: DssStreamType = DssStreamType.Main, record_source: DssRecordSource = DssRecordSource.Center
+        self,
+        channel_id: str,
+        start_time: str,
+        end_time: str,
+        stream_type: DssStreamType = DssStreamType.Main,
+        record_source: DssRecordSource = DssRecordSource.Center,
     ) -> Optional[List[Dict[str, Any]]]:
         """
         Search for available recordings in a time period.
