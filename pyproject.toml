@@ -10,7 +10,7 @@ requires-python = ">=3.13"
 dependencies = [
     "requests >=2.32.5,<3.0.0",
     "urllib3 >=2.6.3,<3.0.0",
-    "rich >=14.2.0,<15.0.0",
+    "rich >=15.0.0,<16.0.0",
     "python-dotenv >=1.2.2,<2.0.0",
 ]
 
